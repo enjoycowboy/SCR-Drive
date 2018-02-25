@@ -10,10 +10,11 @@ volatile int  Tglob=0;
 volatile int cutoff = 0;
 volatile int angulo = 0;
 volatile bool Rtrig, Strig, Ttrig = false;
+volatile int inVerde, inVermelho, inAmarelo;
 
 void setup(){
   
-  Serial.begin(9600); 
+  Serial.begin(115200); 
   
 	DDRB  = 0x00; //R INPUT PINB5 DIGITAL PIN 13 / VERDE
 	DDRB  = (1 << PORTB2) | (1 << PORTB3) | (1 << PORTB4);
@@ -54,7 +55,7 @@ void setup(){
 	TCCR1B = 0;
 	TCNT1 = 0;
 	OCR1A = 624;              // 100 Hz (16000000/((624+1)*256))
-	CCR1B |= (1 << WGM12);   // CTC. Prescaler 256, setado na interr
+	TCCR1B |= (1 << WGM12);   // CTC. Prescaler 256, setado na interr
 	TIMSK1 |= (1 << OCIE1A);  // Output Compare Match A Interrupt Enable
 
   //TIMR2. fase T
@@ -72,6 +73,7 @@ void loop(){
   
 	cutoff = analogRead(A5);
 	angulo = cutoff * 0.1578125;
+	
   
   /*
 		esse trecho vai ser comentado fora com o gerador de sinais pq tipo ele vai
@@ -81,18 +83,23 @@ void loop(){
 
 	if (Rglob >= 1023){
 		Rglob = 0;
-		PORTB |= (0 << PB2);
+		PORTB = (0 << PB2);
 	}
 
 	if (Sglob >= 1023){
 		Sglob = 0;
-		PORTB |= (1 << PB3);
+		PORTB = (0 << PB3);
 	}
 
 	if (Tglob >= 1023){
 		Tglob = 0;
-		PORTB |= (1 << PB4);
+		PORTB = (0 << PB4);
 	}
+
+	/*if (Rtrig || Strig || Ttrig)
+	{
+		Serial.println ("------------------------ OPTO TRIG -------------------------")
+	}*/
 
 	Serial.println("");
 	Serial.print("POT = ");
@@ -101,11 +108,11 @@ void loop(){
 	Serial.print("\t Angulo de corte = ");
 	Serial.print(angulo);
 	Serial.print("\t R = ");
-	Serial.print(TCNT0);
+	Serial.print(Rglob);
 	Serial.print("\t S = ");
-	Serial.print(TCNT1);
+	Serial.print(Sglob);
 	Serial.print("\t T = ");
-	Serial.print(TCNT2);
+	Serial.print(Tglob);
   
   // compara o angulo atual com o angulo de corte e dispara o MOC
 	
@@ -126,12 +133,13 @@ void loop(){
 
 
 // IRQs do tipo PCINT representam as interrupções do optoacoplador.
-// inclusive precisa resetar o timer
+// inclusive precisa resetar o timer e disparar da primeira vez
+
 ISR(PCINT0_vect){ //INTERR fase R.
 	Rtrig = true;	
 	TCNT0 = 0x00;
 	TCCR0B |= (1 << CS02) | (1 << CS00);  //prescaler
-	PORTB |= (0 << PB2);
+	PORTB = (0 << PB2);
 	Rglob = 0;
 }
 
@@ -140,7 +148,7 @@ ISR(PCINT1_vect){ //INTERR fase S
 	TCCR1B |= (1 << CS12);    // Prescaler 256
 	TCNT1 = 0x00;
 	Sglob = 0;  
-	PORTB |= (0 << PB3);
+	PORTB = (0 << PB3);
 }
 
 ISR(PCINT2_vect){ //INTERR fase T. A parte de desativar o sinal do moc talvez precise ficar inclusa
