@@ -156,6 +156,7 @@ ISR(PCINT2_vect){ //INTERR fase T. A parte de desativar o sinal do moc talvez pr
 	TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);
 	TCNT2 = 0x00;
 	Tglob = 0;
+	PORTB = (0 << PB4);
 }
 
 ISR(TIMER0_COMPA_vect){
