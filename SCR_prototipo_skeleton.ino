@@ -9,15 +9,13 @@ volatile int  Sglob=0;
 volatile int  Tglob=0;
 volatile int cutoff = 0;
 volatile int angulo = 0;
-volatile bool Rtrig, Strig, Ttrig = false;
-volatile int inVerde, inVermelho, inAmarelo;
 
 void setup(){
   
   Serial.begin(115200); 
   
 	DDRB  = 0x00; //R INPUT PINB5 DIGITAL PIN 13 / VERDE
-	DDRB  = (1 << PORTB2) | (1 << PORTB3) | (1 << PORTB4);
+	DDRB  |= (1 << PORTB2) | (1 << PORTB3) | (1 << PORTB4);
 	PORTB |= (1 << PORTB5);
   
 	DDRC = 0x00; //S INPUT PINC0 ANALOG INPUT 0 / VERMELHO
@@ -33,37 +31,45 @@ void setup(){
 	PCICR |= (1 << PCIE2) | (1 << PCIE1) | (1 << PCIE0);
 	PCMSK2 |= (1 << PCINT23);
 	PCMSK1 |= (1 << PCINT8);
-	PCMSK0 |= (1 << PCINT5);
+	PCMSK0 |= (1 << PCINT0);
   
-  /*
-  3 timers ajustados pra 100hz pra contar até 1024 cada um 
-  em cada interr. Em cada interr, o valor é comparado a leitura do ADC
+ /*
+	3 timers ajustados  pra contar até 1024 cada um 
+	em cada interr. Em cada interr, o valor é comparado a leitura do ADC
+	lógica de calculo dos timers:
+	em 0.02 segundos (1/50) ele precisa contar até 1024.
+	portanto cada tick vai durar 0,000019531
+	o que implica em f = 51200Hz.
   
-  */
+ */
 
-  //TIMR0. fase R
+// interr timer 0 FASE R
+
 	TCCR0A = 0;
 	TCCR0B = 0;
-	TCNT0 = 0;    // 100.16025641025641 Hz (16000000/((155+1)*1024))
-	OCR0A = 155;  
-	TCCR0A |= (1 << WGM01); // CTC
-	TCCR0A = 0x00;// afeta o disparo do timer, eu só quero disparar na interrupção, portanto
+	TCNT0 = 0;
+
+	OCR0A = 38;// 51282.05128205128 Hz (16000000/((38+1)*8))
+	TCCR0A |= (1 << WGM01);// CTC
 	TIMSK0 |= (1 << OCIE0A);// Output Compare Match A Interrupt Enable
 
-  //TIMR1. fase S
+// interr timer 1 FASE S 
+
 	TCCR1A = 0;
 	TCCR1B = 0;
 	TCNT1 = 0;
-	OCR1A = 624;              // 100 Hz (16000000/((624+1)*256))
-	TCCR1B |= (1 << WGM12);   // CTC. Prescaler 256, setado na interr
-	TIMSK1 |= (1 << OCIE1A);  // Output Compare Match A Interrupt Enable
 
-  //TIMR2. fase T
+	OCR1A = 311;// 51282.05128205128 Hz (16000000/((311+1)*1))
+	TCCR1B |= (1 << WGM12);// CTC
+	TIMSK1 |= (1 << OCIE1A);// Output Compare Match A Interrupt Enable
+
+// interr timer 2 FASE T
+
 	TCCR2A = 0;
 	TCCR2B = 0;
 	TCNT2 = 0;
-	OCR2A = 155;    // 100.16025641025641 Hz (16000000/((155+1)*1024))  
-	TCCR2A |= (1 << WGM21);// CTC  . Prescaler 1024  interr
+	OCR2A = 38;// 51282.05128205128 Hz (16000000/((38+1)*8))
+	TCCR2A |= (1 << WGM21);// CTC
 	TIMSK2 |= (1 << OCIE2A);// Output Compare Match A Interrupt Enable
  
   sei();
@@ -81,17 +87,17 @@ void loop(){
 
    */
 
-	if (Rglob >= 1023){
+	if (Rglob >= 1000){
 		Rglob = 0;
 		PORTB = (0 << PB2);
 	}
 
-	if (Sglob >= 1023){
+	if (Sglob >= 1000){
 		Sglob = 0;
 		PORTB = (0 << PB3);
 	}
 
-	if (Tglob >= 1023){
+	if (Tglob >= 1000){
 		Tglob = 0;
 		PORTB = (0 << PB4);
 	}
@@ -102,10 +108,10 @@ void loop(){
 	}*/
 
 	Serial.println("");
-	Serial.print("POT = ");
+	Serial.print("ADC = ");
 	Serial.print(cutoff);
   
-	Serial.print("\t Angulo de corte = ");
+	Serial.print("\t CORTE = ");
 	Serial.print(angulo);
 	Serial.print("\t R = ");
 	Serial.print(Rglob);
@@ -136,24 +142,24 @@ void loop(){
 // inclusive precisa resetar o timer e disparar da primeira vez
 
 ISR(PCINT0_vect){ //INTERR fase R.
-	Rtrig = true;	
+	
 	TCNT0 = 0x00;
-	TCCR0B |= (1 << CS02) | (1 << CS00);  //prescaler
+	TCCR0B |= (1 << CS01);// Prescaler 8
 	PORTB = (0 << PB2);
 	Rglob = 0;
 }
 
 ISR(PCINT1_vect){ //INTERR fase S
-	Rtrig = true;	
-	TCCR1B |= (1 << CS12);    // Prescaler 256
+	
+	TCCR1B |= (1 << CS10);// Prescaler 1
 	TCNT1 = 0x00;
 	Sglob = 0;  
 	PORTB = (0 << PB3);
 }
 
 ISR(PCINT2_vect){ //INTERR fase T. A parte de desativar o sinal do moc talvez precise ficar inclusa
-	Rtrig = true;	
-	TCCR2B |= (1 << CS22) | (1 << CS21) | (1 << CS20);
+	
+	TCCR2B |= (1 << CS21);// Prescaler 8
 	TCNT2 = 0x00;
 	Tglob = 0;
 	PORTB = (0 << PB4);
@@ -161,15 +167,15 @@ ISR(PCINT2_vect){ //INTERR fase T. A parte de desativar o sinal do moc talvez pr
 
 ISR(TIMER0_COMPA_vect){
 	Rglob++;
-  	Rtrig = false;
+  	
 }
 
 ISR(TIMER1_COMPA_vect){
  	Sglob++;
-	Strig = false;
+	
 }
 
 ISR(TIMER2_COMPA_vect){
 	Tglob++;
-  	Ttrig = false;
+  	
 }
